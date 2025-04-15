@@ -1,14 +1,19 @@
 # port_watchdog.py
 import psutil
 import time
-import socket
 import dns.resolver
+import json
 
 SUSPICIOUS_IPS = {
     "discord.com": "discord.com",
     "ngrok.io": "ngrok.io",
-    "pastebin.com": "pastebin.com"
+    "pastebin.com": "pastebin.com",
+    "raw.githubusercontent.com": "raw.githubusercontent.com"
 }
+
+with open("trusted_process.json", "r") as file:
+    trusted_process = json.load(file)
+
 
 def resolve_ips(domain):
     try:
@@ -17,6 +22,7 @@ def resolve_ips(domain):
     except Exception as e:
         print(f"[!] DNS resolution failed for {domain}: {e}")
         return []
+
 
 def expand_suspicious_domains(ip_domain_map):
     domain_to_label = {}
@@ -40,7 +46,10 @@ for ip, label in SUSPICIOUS_IPS.items():
     print(f"  → {ip} : {label}")
 
 SUSPICIOUS_IPS = expand_suspicious_domains(SUSPICIOUS_IPS)
+
+
 def monitor_connections():
+    seen_connections = set()
     print("🚨 Watching for suspicious outbound connections...\n")
     while True:
         for conn in psutil.net_connections(kind='inet'):
@@ -54,11 +63,17 @@ def monitor_connections():
             if remote_ip.startswith("127.") or remote_ip.startswith("::1"):
                 continue
 
+            key = (conn.pid, remote_ip, conn.status)
+            if key in seen_connections:
+                continue
+            seen_connections.add(key)
+
             if remote_ip in SUSPICIOUS_IPS:
                 try:
                     proc = psutil.Process(conn.pid)
                     proc_name = proc.name()
-
+                    if proc_name.lower() in trusted_process:
+                        continue
                 except:
                     proc_name = "Unknown"
 
@@ -67,7 +82,7 @@ def monitor_connections():
                 print(f"  → Domain: {SUSPICIOUS_IPS[remote_ip]}")
                 print(f"  → Process: {proc_name} (PID: {conn.pid})")
                 print(f"  → Status: {conn.status}")
-        time.sleep(0.1)
+        time.sleep(0.03)
 
 
 if __name__ == "__main__":
