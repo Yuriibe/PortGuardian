@@ -22,7 +22,7 @@ def resolve_ips(domain) -> list:
        param:
            domain (str): Domain: 'pastebin.com'
 
-       Returns:
+       return:
            list: list of ips as strings
        """
     try:
@@ -36,7 +36,7 @@ def resolve_ips(domain) -> list:
 def populate_suspicious_ips(ip_domain_map) -> dict:
     """
     Takes a Dictionary of suspicious domains and add matching ips
-    :param ip_domain_map: (dict)
+    :param ip_domain_map: dict
     :return:
     """
     domain_to_label = {}
@@ -55,11 +55,19 @@ def populate_suspicious_ips(ip_domain_map) -> dict:
     return ip_domain_map
 
 
-print("\n🚨 Final Suspicious IPs:")
-for ip, label in SUSPICIOUS_IPS.items():
-    print(f"  → {ip} : {label}")
+def get_conn_based_on_status(conn, connection_type):
+    """
+    :param conn: psutil._common.sconn
+    :param connection_type: str (SYN_SENT| ESTABLISHED| FIN_WAIT1| 3WAY)
+    :return:conn: psutil._common.sconn
+    """
+    if connection_type.lower() == "3WAY":
+        return conn
+    if conn.status.lower() == connection_type.lower():
+        return conn
 
-SUSPICIOUS_IPS = populate_suspicious_ips(SUSPICIOUS_IPS)
+
+
 
 
 def monitor_connections():
@@ -71,9 +79,6 @@ def monitor_connections():
             if not conn.raddr:
                 continue
 
-            if conn.status != 'ESTABLISHED':
-                continue
-
             remote_ip = conn.raddr.ip
 
             if remote_ip.startswith("127.") or remote_ip.startswith("::1"):
@@ -83,6 +88,7 @@ def monitor_connections():
 
             if key in seen_connections:
                 continue
+
             seen_connections.add(key)  # add detection to already seen detected connections
 
             if remote_ip in SUSPICIOUS_IPS:
@@ -99,8 +105,9 @@ def monitor_connections():
                 print(f"  → Domain: {SUSPICIOUS_IPS[remote_ip]}")
                 print(f"  → Process: {proc_name} (PID: {conn.pid})")
                 print(f"  → Status: {conn.status}")
-        time.sleep(0.03)
+
 
 
 if __name__ == "__main__":
+    SUSPICIOUS_IPS = populate_suspicious_ips(SUSPICIOUS_IPS)
     monitor_connections()
